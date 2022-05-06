@@ -21,8 +21,7 @@ contract ChainRep {
     }
 
     mapping(address => User) public userProfile;
-    User[] public users;
-    Review[] public reviews;
+    mapping(uint256 => Review) public singleReview;
     event Reviewed(address reviewer, address indexed reviewed, Review review);
 
     function createReview(
@@ -33,7 +32,7 @@ contract ChainRep {
         address _reviewed
     ) public {
         reviewCount++;
-        Review memory review = Review(
+        singleReview[reviewCount] = Review(
             reviewCount,
             _rating,
             _description,
@@ -41,8 +40,8 @@ contract ChainRep {
             _reviewer,
             _reviewed
         );
-        reviews.push(review);
-        User memory reviewed = userProfile[_reviewed];
+        Review memory review = singleReview[reviewCount];
+        User storage reviewed = userProfile[_reviewed];
         // Check if user profile has been initialized
         if (reviewed.reviewsReceivedCount > 0) {
             reviewed.reviewsReceivedCount++;
@@ -56,32 +55,32 @@ contract ChainRep {
             reviewed.totalRating = review.rating;
             reviewed.rawRatingScore = review.rating;
         }
-        emit Reviewed(_reviewer, _reviewed, reviews[reviewCount]);
+        emit Reviewed(_reviewer, _reviewed, singleReview[reviewCount]);
     }
 
-    function userTotalRating(address _user) public view returns (uint256) {
+    function getUserTotalRating(address _user) public view returns (uint256) {
         User memory user = userProfile[_user];
         return user.totalRating;
     }
 
-    function getUserCategoryRating(address _user, string memory _category)
+    function getUserCategoryRating(address _reviewed, string memory _category)
         public
         view
         returns (uint256)
     {
+        uint256 userCategoryReviewCount;
         uint256 categoryRating;
-        uint256 categoryReviewCount;
-        for (uint256 i = 0; i > reviewCount; i++) {
-            Review memory review = reviews[i];
+        for (uint256 i = 1; i < reviewCount; i++) {
+            Review memory review = singleReview[i];
             if (
-                review.reviewed == _user &&
                 (keccak256(abi.encodePacked((review.category))) ==
-                    keccak256(abi.encodePacked((_category))))
+                    keccak256(abi.encodePacked((_category)))) &&
+                review.reviewed == _reviewed
             ) {
-                categoryReviewCount++;
+                userCategoryReviewCount++;
                 categoryRating += review.rating;
             }
         }
-        return categoryRating / categoryReviewCount;
+        return categoryRating / userCategoryReviewCount;
     }
 }
