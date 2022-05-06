@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-
-contract ChainRep is Ownable {
+contract ChainRep {
     uint256 public reviewCount;
 
     struct Review {
@@ -17,15 +15,14 @@ contract ChainRep is Ownable {
 
     struct User {
         address userAddress;
-        uint256[] givenReviewIds;
-        uint256[] receivedReviewIds;
         uint256 reviewsReceivedCount;
         uint256 totalRating;
+        uint256 rawRatingScore;
     }
 
     mapping(address => User) public userProfile;
-    mapping(uint256 => Review) public singleReview;
-    mapping(address => uint256) public userRating;
+    User[] public users;
+    Review[] public reviews;
     event Reviewed(address reviewer, address indexed reviewed, Review review);
 
     function createReview(
@@ -36,7 +33,7 @@ contract ChainRep is Ownable {
         address _reviewed
     ) public {
         reviewCount++;
-        singleReview[reviewCount] = Review(
+        Review memory review = Review(
             reviewCount,
             _rating,
             _description,
@@ -44,63 +41,47 @@ contract ChainRep is Ownable {
             _reviewer,
             _reviewed
         );
-        Review memory review = singleReview[reviewCount];
-        User storage reviewer = userProfile[_reviewer];
-        User storage reviewed = userProfile[_reviewed];
+        reviews.push(review);
+        User memory reviewed = userProfile[_reviewed];
         // Check if user profile has been initialized
-        if (reviewed.userAddress == _reviewed) {
-            reviewed.receivedReviewIds.push(reviewCount);
+        if (reviewed.reviewsReceivedCount > 0) {
             reviewed.reviewsReceivedCount++;
-            updateUserTotalRating(_reviewed);
+            reviewed.rawRatingScore += review.rating;
+            reviewed.totalRating = (reviewed.rawRatingScore /
+                reviewed.reviewsReceivedCount);
         } else {
             // initialize user profile if it doesn't exist
-            userProfile[_reviewed] = User(
-                _reviewed,
-                [0],
-                [reviewCount],
-                1,
-                review.rating
-            );
+            reviewed.userAddress = _reviewed;
+            reviewed.reviewsReceivedCount++;
+            reviewed.totalRating = review.rating;
+            reviewed.rawRatingScore = review.rating;
         }
-        if (reviewer.userAddress == _reviewer) {
-            reviewer.givenReviewIds.push(reviewCount);
-        } else {
-            userProfile[_reviewer] = User(_reviewer, [reviewCount], [0], 0, 0);
-        }
-        emit Reviewed(_reviewer, _reviewed, singleReview[reviewCount]);
+        emit Reviewed(_reviewer, _reviewed, reviews[reviewCount]);
     }
 
-    function updateUserTotalRating(address _reviewed) internal {
-        User memory reviewed = userProfile[_reviewed];
-        uint256 userReviewCount = reviewed.reviewsReceivedCount;
-        uint256 rating;
-        for (uint256 i = 0; i < userReviewCount - 1; i++) {
-            uint256 reviewIndex = reviewed.receivedReviewIds[i];
-            Review memory review = singleReview[reviewIndex];
-            rating = rating + review.rating;
-        }
-        reviewed.totalRating = rating / userReviewCount;
+    function userTotalRating(address _user) public view returns (uint256) {
+        User memory user = userProfile[_user];
+        return user.totalRating;
     }
 
-    function getUserCategoryRating(address _reviewed, string memory _category)
+    function getUserCategoryRating(address _user, string memory _category)
         public
         view
         returns (uint256)
     {
-        User memory reviewed = userProfile[_reviewed];
-        uint256 userCategoryReviewCount;
         uint256 categoryRating;
-        for (uint256 i = 0; i < reviewed.reviewsReceivedCount - 1; i++) {
-            uint256 reviewIndex = reviewed.receivedReviewIds[i];
-            Review memory review = singleReview[reviewIndex];
+        uint256 categoryReviewCount;
+        for (uint256 i = 0; i > reviewCount; i++) {
+            Review memory review = reviews[i];
             if (
+                review.reviewed == _user &&
                 (keccak256(abi.encodePacked((review.category))) ==
                     keccak256(abi.encodePacked((_category))))
             ) {
-                userCategoryReviewCount++;
-                categoryRating = categoryRating + review.rating;
+                categoryReviewCount++;
+                categoryRating += review.rating;
             }
         }
-        return categoryRating / userCategoryReviewCount;
+        return categoryRating / categoryReviewCount;
     }
 }
