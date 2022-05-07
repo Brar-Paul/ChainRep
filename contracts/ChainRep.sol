@@ -28,7 +28,6 @@ contract ChainRep {
         uint256 _rating,
         string memory _description,
         string memory _category,
-        address _reviewer,
         address _reviewed
     ) public {
         reviewCount++;
@@ -37,7 +36,7 @@ contract ChainRep {
             _rating,
             _description,
             _category,
-            _reviewer,
+            msg.sender,
             _reviewed
         );
         Review memory review = singleReview[reviewCount];
@@ -55,7 +54,7 @@ contract ChainRep {
             reviewed.totalRating = review.rating;
             reviewed.rawRatingScore = review.rating;
         }
-        emit Reviewed(_reviewer, _reviewed, singleReview[reviewCount]);
+        emit Reviewed(msg.sender, _reviewed, singleReview[reviewCount]);
     }
 
     function getUserTotalRating(address _user) public view returns (uint256) {
